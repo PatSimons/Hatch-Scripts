@@ -4,13 +4,13 @@ document.addEventListener("DOMContentLoaded", () => {
     // 1. MOVEMENT CONTROLS
     // ═══════════════════════════════════════════════════════════════
   
-    const FOLLOW_LERP       = 0.2;
-    const DELAY_FRAMES      = 3;
-    const THRESHOLD         = 20;
-  
-    const TRAIL_LERP        = 0.15;
-    const TRAIL_DELAY       = 4;
-    const TRAIL_THRESHOLD   = 25;
+    const FOLLOW_LERP       = 0.1;   // interpolation speed toward target (0–1, higher = snappier)
+    const DELAY_FRAMES      = 3;    // ring buffer size: how many frames behind the follower lags
+    const THRESHOLD         = 20;   // min pixel distance before lerp activates (prevents micro-jitter)
+
+    const TRAIL_LERP        = 0.05; // same as above but for the trail (lower = lazier)
+    const TRAIL_DELAY       = 4;    // trail lags this many more frames behind than the follower
+    const TRAIL_THRESHOLD   = 25;   // trail jitter threshold (slightly larger than follower)
   
     // ═══════════════════════════════════════════════════════════════
     // 2. COLORS
@@ -19,7 +19,7 @@ document.addEventListener("DOMContentLoaded", () => {
     const COLORS = {
       primary:   "oklch(0.8883 0.0586 205.57)",
       secondary: "oklch(0.8375 0.1029 307.72)",
-      accent:    "oklch(0.9379 0.2138 121.42)",
+      accent:    "oklch(0.9379 0.2146 115.41)",
     };
   
     function alpha(color, a) {
