@@ -201,7 +201,18 @@ document.addEventListener("DOMContentLoaded", () => {
     var tThreshSq = TRAIL_THRESHOLD * TRAIL_THRESHOLD;
   
     gsap.ticker.add(function() {
-      if (movementLocked) return;
+      if (movementLocked) {
+        if (centeredTriggerEl) {
+          var rect = centeredTriggerEl.getBoundingClientRect();
+          var cx = rect.left + rect.width / 2;
+          var cy = rect.top + rect.height / 2;
+          gsap.set(followerEl, { x: cx, y: cy });
+          if (hasTrail) gsap.set(trailEl, { x: cx, y: cy });
+          fPos.x = cx; fPos.y = cy;
+          if (hasTrail) { tPos.x = cx; tPos.y = cy; }
+        }
+        return;
+      }
   
       fBuf[fHead].x = mouse.x;
       fBuf[fHead].y = mouse.y;
@@ -235,6 +246,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // ── Triggers ──────────────────────────────────────────────────
   
     var activeTrigger = null;
+    var centeredTriggerEl = null;
   
     if (triggers.length === 0) return;
   
@@ -249,15 +261,16 @@ document.addEventListener("DOMContentLoaded", () => {
   
           if (state.centered) {
             movementLocked = true;
-            var rect = container.getBoundingClientRect();
+            var rect = trigger.getBoundingClientRect();
             var cx   = rect.left + rect.width / 2;
             var cy   = rect.top + rect.height / 2;
-  
+
             gsap.to(followerEl, {
               x: cx, y: cy,
               duration: (state.transition && state.transition.duration) || 0.6,
               ease:     (state.transition && state.transition.ease) || "power3.inOut",
               overwrite: "auto",
+              onComplete: function() { centeredTriggerEl = trigger; },
             });
             if (hasTrail) {
               gsap.to(trailEl, {
@@ -280,12 +293,9 @@ document.addEventListener("DOMContentLoaded", () => {
           activeTrigger = null;
   
           if (state.centered) {
-            fPos.x = mouse.x;
-            fPos.y = mouse.y;
-            if (hasTrail) {
-              tPos.x = mouse.x;
-              tPos.y = mouse.y;
-            }
+            gsap.killTweensOf(followerEl, "x,y");
+            if (hasTrail) gsap.killTweensOf(trailEl, "x,y");
+            centeredTriggerEl = null;
             for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
             if (hasTrail) {
               for (var j = 0; j < tBufLen; j++) { tBuf[j].x = mouse.x; tBuf[j].y = mouse.y; }
