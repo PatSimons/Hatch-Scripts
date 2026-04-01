@@ -48,10 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // ═══════════════════════════════════════════════════════════════
 
     const PRESETS = {
-      softPrimary:       preset(COLORS.primary,   0.4, 0, "10%", "30%", "50%", 1,   0.5),
-      softSecondary:     preset(COLORS.secondary, 0.4, 0, "40%", "55%", "75%", 1,   0.5),
+      softPrimary:       preset(COLORS.primary,   0.4, 0, "10%", "30%", "40%", 1,   0.6),
+      softSecondary:     preset(COLORS.secondary, 0.4, 0, "40%", "55%", "70%", 1,   0.5),
       hidden:            preset(COLORS.primary,   0,   0, "20%", "50%", "75%", 0.3, 0),
-      focused:           preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
+      focusedPrimary:    preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
+      focusedSecondary:  preset(COLORS.secondary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
       centeredPrimary:   preset(COLORS.primary,   0.4, 0, "20%", "40%", "70%", 1,   1),
       centeredSecondary: preset(COLORS.secondary, 0.4, 0, "25%", "45%", "75%", 1,   1),
     };
@@ -85,19 +86,20 @@ document.addEventListener("DOMContentLoaded", () => {
 
       hide: {
         follower:   PRESETS.hidden,
-        transition: { duration: 0.3, ease: "power2.in" },
+        transition: { duration: 0.4, ease: "back.out(1.7)" },
       },
 
       focus: {
-        follower:   PRESETS.focused,
-        transition: { duration: 0.35, ease: "power2.out" },
+        follower:   PRESETS.focusedPrimary,
+        trail:      PRESETS.focusedSecondary,
+        transition: { duration: 0.4, ease: "back.out(1.7)" },
       },
 
       centered: {
         centered: true,
         follower:   PRESETS.centeredPrimary,
         trail:      PRESETS.centeredSecondary,
-        transition: { duration: 1, ease: "back.out(1.7)" },
+        transition: { duration: 0.4, ease: "back.out(1.7)" },
       },
     };
   
