@@ -48,11 +48,11 @@ document.addEventListener("DOMContentLoaded", () => {
     // ═══════════════════════════════════════════════════════════════
 
     const PRESETS = {
-      softPrimary:       preset(COLORS.primary,   0.4, 0, "10%", "30%", "40%", 1,   0.6),
+      softPrimary:       preset(COLORS.primary,   0.5, 0, "10%", "30%", "40%", 1,   0.6),
       softSecondary:     preset(COLORS.secondary, 0.4, 0, "40%", "55%", "70%", 1,   0.5),
       hidden:            preset(COLORS.primary,   0,   0, "20%", "50%", "75%", 0.3, 0),
       focusedPrimary:    preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
-      focusedSecondary:  preset(COLORS.secondary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
+      focusedSecondary:  preset(COLORS.secondary, 0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
       centeredPrimary:   preset(COLORS.primary,   0.4, 0, "20%", "40%", "70%", 1,   1),
       centeredSecondary: preset(COLORS.secondary, 0.4, 0, "25%", "45%", "75%", 1,   1),
     };
