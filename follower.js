@@ -25,108 +25,78 @@ document.addEventListener("DOMContentLoaded", () => {
     function alpha(color, a) {
       return color.replace(")", " / " + a + ")");
     }
-  
+
+    function preset(color, midA, edgeA, stopIn, stopMid, stopEdge, scale, opacity) {
+      return {
+        colorInner: color,
+        colorMid:   alpha(color, midA),
+        colorEdge:  alpha(color, edgeA),
+        stopInner:  stopIn,
+        stopMid:    stopMid,
+        stopEdge:   stopEdge,
+        scale:      scale,
+        opacity:    opacity,
+      };
+    }
+
     // ═══════════════════════════════════════════════════════════════
-    // 3. DEFAULTS
+    // 3. PRESETS
+    // ═══════════════════════════════════════════════════════════════
+    //
+    //  preset( color, midA, edgeA, stopIn, stopMid, stopEdge, scale, opacity )
+    //
+    // ═══════════════════════════════════════════════════════════════
+
+    const PRESETS = {
+      softPrimary:       preset(COLORS.primary,   0.4, 0, "10%", "30%", "50%", 1,   0.5),
+      softSecondary:     preset(COLORS.secondary, 0.4, 0, "40%", "55%", "75%", 1,   0.5),
+      hidden:            preset(COLORS.primary,   0,   0, "20%", "50%", "75%", 0.3, 0),
+      focused:           preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
+      centeredPrimary:   preset(COLORS.primary,   0.4, 0, "20%", "40%", "70%", 1,   1),
+      centeredSecondary: preset(COLORS.secondary, 0.4, 0, "25%", "45%", "75%", 1,   1),
+    };
+
+    // ═══════════════════════════════════════════════════════════════
+    // 4. DEFAULTS
     // ═══════════════════════════════════════════════════════════════
   
     const DEFAULT_STATE     = "default";
     const DEFAULT_RETURN    = { duration: 1, ease: "back.out(1.7)" };
   
     // ═══════════════════════════════════════════════════════════════
-    // 4. STATE DEFINITIONS
+    // 5. STATE DEFINITIONS
     // ═══════════════════════════════════════════════════════════════
     //
-    // Trigger usage:  data-trigger="hover1"  (single attribute)
+    // Trigger usage:  data-trigger="stateName"
     //
-    // Each state defines "follower" and optionally "trail".
+    // Each state references presets for "follower" and optionally "trail".
     // If "trail" is omitted it inherits from "follower".
     //
-    // Colors   → swapped instantly
-    // Stops    → tweened smoothly
-    // scale    → tweened smoothly
-    // opacity  → tweened smoothly (omit to keep current value)
-    //
     // centered → locks movement, tweens both followers to container center
-    //
     // transition → { duration, ease }
     // ═══════════════════════════════════════════════════════════════
-  
+
     const STATES = {
-  
+
       default: {
-        follower: {
-          colorInner: COLORS.primary,
-          colorMid:   alpha(COLORS.primary, 0.4),
-          colorEdge:  alpha(COLORS.primary, 0),
-          stopInner:  "10%",
-          stopMid:    "30%",
-          stopEdge:   "50%",
-          scale:      1,
-          opacity:    0.5,
-        },
-        trail: {
-          colorInner: COLORS.secondary,
-          colorMid:   alpha(COLORS.secondary, 0.4),
-          colorEdge:  alpha(COLORS.secondary, 0),
-          stopInner:  "40%",
-          stopMid:    "55%",
-          stopEdge:   "75%",
-          scale:      1,
-          opacity:    0.5,
-        },
+        follower: PRESETS.softPrimary,
+        trail:    PRESETS.softSecondary,
       },
-  
+
       hide: {
-        follower: {
-          colorInner: COLORS.primary,
-          colorMid:   alpha(COLORS.primary, 0),
-          colorEdge:  alpha(COLORS.primary, 0),
-          stopInner:  "20%",
-          stopMid:    "50%",
-          stopEdge:   "75%",
-          scale:      0.3,
-          opacity:    0,
-        },
+        follower:   PRESETS.hidden,
         transition: { duration: 0.3, ease: "power2.in" },
       },
-  
+
       focus: {
-        follower: {
-          colorInner: COLORS.primary,
-          colorMid:   alpha(COLORS.primary, 0.4),
-          colorEdge:  alpha(COLORS.primary, 0),
-          stopInner:  "30%",
-          stopMid:    "50%",
-          stopEdge:   "75%",
-          scale:      0.2,
-          opacity:    0.2,
-        },
+        follower:   PRESETS.focused,
         transition: { duration: 0.35, ease: "power2.out" },
       },
-  
+
       centered: {
         centered: true,
-        follower: {
-          colorInner: COLORS.primary,
-          colorMid:   alpha(COLORS.primary, 0.4),
-          colorEdge:  alpha(COLORS.primary, 0),
-          stopInner:  "20%",
-          stopMid:    "40%",
-          stopEdge:   "70%",
-          scale:      1,
-          opacity:    1,
-        },
-        trail: {
-          colorInner: COLORS.secondary,
-          colorMid:   alpha(COLORS.secondary, 0.4),
-          colorEdge:  alpha(COLORS.secondary, 0),
-          stopInner:  "25%",
-          stopMid:    "45%",
-          stopEdge:   "75%",
-          scale:      1,
-          opacity:    1,
-        },
+        follower:   PRESETS.centeredPrimary,
+        trail:      PRESETS.centeredSecondary,
         transition: { duration: 1, ease: "back.out(1.7)" },
       },
     };
