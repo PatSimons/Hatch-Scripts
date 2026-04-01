@@ -53,8 +53,8 @@ document.addEventListener("DOMContentLoaded", () => {
       hidden:            preset(COLORS.primary,   0,   0, "20%", "50%", "75%", 0.3, 0),
       focusedPrimary:    preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
       focusedSecondary:  preset(COLORS.secondary, 0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
-      centeredPrimary:   preset(COLORS.primary,   0.4, 0, "20%", "80%", "90%", 1,   1),
-      centeredSecondary: preset(COLORS.secondary, 0.4, 0, "25%", "45%", "55%", 1,   1),
+      centeredPrimary:   preset(COLORS.primary,   0.4, 0, "30%", "35%", "40%", 0.8,   1),
+      centeredSecondary: preset(COLORS.secondary, 0.4, 0, "30%", "35%", "40%", 1,   1),
     };
 
     // ═══════════════════════════════════════════════════════════════
