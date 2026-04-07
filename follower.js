@@ -1,313 +1,375 @@
-document.addEventListener("DOMContentLoaded", () => {
+document.addEventListener("DOMContentLoaded", function() {
 
-    // ═══════════════════════════════════════════════════════════════
-    // 1. MOVEMENT CONTROLS
-    // ═══════════════════════════════════════════════════════════════
-  
-    const FOLLOW_LERP       = 0.1;   // interpolation speed toward target (0–1, higher = snappier)
-    const DELAY_FRAMES      = 3;    // ring buffer size: how many frames behind the follower lags
-    const THRESHOLD         = 20;   // min pixel distance before lerp activates (prevents micro-jitter)
+  // ═══════════════════════════════════════════════════════════════
+  // 1. MOVEMENT CONTROLS
+  // ═══════════════════════════════════════════════════════════════
 
-    const TRAIL_LERP        = 0.05; // same as above but for the trail (lower = lazier)
-    const TRAIL_DELAY       = 4;    // trail lags this many more frames behind than the follower
-    const TRAIL_THRESHOLD   = 25;   // trail jitter threshold (slightly larger than follower)
-  
-    // ═══════════════════════════════════════════════════════════════
-    // 2. COLORS
-    // ═══════════════════════════════════════════════════════════════
-  
-    const COLORS = {
-      primary:   "oklch(0.8883 0.0586 205.57)",
-      secondary: "oklch(0.8375 0.1029 307.72)",
-      accent:    "oklch(0.9379 0.2146 115.41)",
+  const SPRING_STIFFNESS = 0.25;  // pull force toward target per frame (higher = snappier)
+  const SPRING_DAMPING   = 0.5;  // velocity decay per frame (lower = more overshoot/bounce)
+  const DELAY_FRAMES     = 1;     // ring buffer size: frames the follower lags behind cursor
+
+  const TRAIL_STIFFNESS  = 0.15;  // same as above but for the trail (lower = lazier pull)
+  const TRAIL_DAMPING    = 0.35;  // trail damps slightly more than follower
+  const TRAIL_DELAY      = 2;     // trail lags this many frames more than the follower
+
+  const VELOCITY_MAX    = 0;    // px/frame spring speed that maps to full expansion
+  const VELOCITY_EXPAND = 0;    // extra pixels added to radius at peak speed
+
+  // ═══════════════════════════════════════════════════════════════
+  // 2. COLORS
+  // ═══════════════════════════════════════════════════════════════
+
+  function toRGB(color) {
+    var c = document.createElement("canvas");
+    c.width = c.height = 1;
+    var x = c.getContext("2d");
+    x.fillStyle = color;
+    x.fillRect(0, 0, 1, 1);
+    var d = x.getImageData(0, 0, 1, 1).data;
+    return { r: d[0], g: d[1], b: d[2] };
+  }
+
+  const COLORS = {
+    primary:   toRGB("oklch(0.8883 0.0586 205.57)"),
+    secondary: toRGB("oklch(0.8375 0.1029 307.72)"),
+    accent:    toRGB("oklch(0.9379 0.2146 115.41)"),
+    neutral:   toRGB("oklch(0.9824 0.013 71.33)"),
+  };
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3. CANVAS
+  // ═══════════════════════════════════════════════════════════════
+
+  const BASE_RADIUS  = 1200;   // base gradient radius in pixels (scale multiplies this)
+  const SHOW_TRAIL   = true;  // set false to disable the trail
+
+  // ═══════════════════════════════════════════════════════════════
+  // 3b. BREATHING
+  // ═══════════════════════════════════════════════════════════════
+
+  const BREATHE_ENABLED = true;   // toggle the pulse on/off
+  const BREATHE_PERIOD  = 3;      // seconds per full inhale → exhale cycle
+  const BREATHE_SCALE   = 0.1;   // ± added to scale at peak (gentle size swell)
+  const BREATHE_OPACITY = 0;   // ± added to opacity at peak
+  const BREATHE_PHASE   = 0.5;    // radians — offsets trail vs follower for organic feel
+
+  // ═══════════════════════════════════════════════════════════════
+  // 4. PRESETS
+  // ═══════════════════════════════════════════════════════════════
+  //
+  //  preset( color, midA, innerStop, midStop, scale, opacity )
+  //
+  //  innerStop → flat bright core (0 = none, 0.1 = 10% solid)
+  //  midStop   → where mid alpha applies (0–1 fraction of radius)
+  //  midA      → alpha at midStop, fades to 0 at edge
+  //  scale     → multiplies BASE_RADIUS
+  //  opacity   → overall opacity
+  //
+  // ═══════════════════════════════════════════════════════════════
+
+  function preset(color, midA, innerStop, midStop, scale, opacity) {
+    return {
+      r: color.r,  g: color.g,  b: color.b,
+      midA:      midA,
+      innerStop: innerStop,
+      midStop:   midStop,
+      scale:     scale,
+      opacity:   opacity,
     };
-  
-    function alpha(color, a) {
-      return color.replace(")", " / " + a + ")");
-    }
+  }
 
-    function preset(color, midA, edgeA, stopIn, stopMid, stopEdge, scale, opacity) {
-      return {
-        colorInner: color,
-        colorMid:   alpha(color, midA),
-        colorEdge:  alpha(color, edgeA),
-        stopInner:  stopIn,
-        stopMid:    stopMid,
-        stopEdge:   stopEdge,
-        scale:      scale,
-        opacity:    opacity,
-      };
-    }
+  const PRESETS = {
+    softPrimary:       preset(COLORS.primary,   0.2, 0.3, 0.5, 0.5, .4),
+    softSecondary:     preset(COLORS.secondary, 0.2, 0.2, 0.5, 1, .4),
+    softAccent:        preset(COLORS.accent,    0.2, 0.2, 0.5, 1, .2),
+    hidden:            preset(COLORS.primary,   0,   0.10, 0.50, 0.2, 0),
+    focusedPrimary:    preset(COLORS.primary,   0.2, 0.2, 0.4, 0.1, 0),
+    focusedSecondary:  preset(COLORS.secondary, 0.2, 0.2, 0.5, 0.5, .6),
+    centeredPrimary:   preset(COLORS.primary,   0.4, 0.25, 0.55, 0.8, 1),
+    centeredSecondary: preset(COLORS.secondary, 0.4, 0.25, 0.55, 1, .5),
+  };
 
-    // ═══════════════════════════════════════════════════════════════
-    // 3. PRESETS
-    // ═══════════════════════════════════════════════════════════════
-    //
-    //  preset( color, midA, edgeA, stopIn, stopMid, stopEdge, scale, opacity )
-    //
-    // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
+  // 5. DEFAULTS
+  // ═══════════════════════════════════════════════════════════════
 
-    const PRESETS = {
-      softPrimary:       preset(COLORS.primary,   0.5, 0, "10%", "35%", "40%", 1,   0.5),
-      softSecondary:     preset(COLORS.secondary, 0.4, 0, "40%", "55%", "70%", 1,   0.3),
-      hidden:            preset(COLORS.primary,   0,   0, "20%", "50%", "75%", 0.3, 0),
-      focusedPrimary:    preset(COLORS.primary,   0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
-      focusedSecondary:  preset(COLORS.secondary, 0.4, 0, "30%", "50%", "75%", 0.2, 0.2),
-      centeredPrimary:   preset(COLORS.primary,   0.4, 0, "30%", "35%", "40%", 0.8,   1),
-      centeredSecondary: preset(COLORS.secondary, 0.4, 0, "30%", "35%", "40%", 1,   1),
-    };
+  const DEFAULT_STATE  = "default";
+  const DEFAULT_RETURN = { duration: 1, ease: "back.out(2)" };
 
-    // ═══════════════════════════════════════════════════════════════
-    // 4. DEFAULTS
-    // ═══════════════════════════════════════════════════════════════
-  
-    const DEFAULT_STATE     = "default";
-    const DEFAULT_RETURN    = { duration: 1, ease: "back.out(1.7)" };
-  
-    // ═══════════════════════════════════════════════════════════════
-    // 5. STATE DEFINITIONS
-    // ═══════════════════════════════════════════════════════════════
-    //
-    // Trigger usage:  data-trigger="stateName"
-    //
-    // Each state references presets for "follower" and optionally "trail".
-    // If "trail" is omitted it inherits from "follower".
-    //
-    // centered → locks movement, tweens both followers to container center
-    // transition → { duration, ease }
-    // ═══════════════════════════════════════════════════════════════
+  // ═══════════════════════════════════════════════════════════════
+  // 6. STATE DEFINITIONS
+  // ═══════════════════════════════════════════════════════════════
+  //
+  //  Trigger usage:  data-trigger="stateName"
+  //
+  //  follower / trail  → preset reference (trail falls back to follower)
+  //  centered          → locks movement, tweens to trigger element center
+  //  transition        → { duration, ease }
+  //
+  // ═══════════════════════════════════════════════════════════════
 
-    const STATES = {
+  const STATES = {
 
-      default: {
-        follower: PRESETS.softPrimary,
-        trail:    PRESETS.softSecondary,
-      },
+    default: {
+      follower: PRESETS.softPrimary,
+      trail:    PRESETS.softSecondary,
+    },
 
-      hide: {
-        follower:   PRESETS.hidden,
-        transition: { duration: 0.4, ease: "back.out(1.7)" },
-      },
+    secondary: {
+      follower: PRESETS.softPrimary,
+      trail:    PRESETS.softAccent,
+    },
 
-      focus: {
-        follower:   PRESETS.focusedPrimary,
-        trail:      PRESETS.focusedSecondary,
-        transition: { duration: 0.4, ease: "back.out(1.7)" },
-      },
+    hide: {
+      follower:   PRESETS.hidden,
+      transition: { duration: 1.5, ease: "back.out(2)" },
+    },
 
-      centered: {
-        centered: true,
-        follower:   PRESETS.centeredPrimary,
-        trail:      PRESETS.centeredSecondary,
-        transition: { duration: 0.4, ease: "back.out(1.7)" },
-      },
-    };
-  
-  
-    // ═══════════════════════════════════════════════════════════════
-    // ENGINE
-    // ═══════════════════════════════════════════════════════════════
-  
-    var container  = document.querySelector('[cs-el="followerContainer"]');
-    var followerEl = container ? container.querySelector('[cs-el="followerElm"]') : null;
-    var trailEl    = container ? container.querySelector('[cs-el="followerElmTrail"]') : null;
-    var triggers   = document.querySelectorAll("[data-trigger]");
-  
-    if (!container || !followerEl) {
-      console.warn("Follower: missing container or follower element — skipping init.");
-      return;
-    }
-  
-    var hasTrail = !!trailEl;
-  
-    // ── Apply state to element ────────────────────────────────────
-  
-    function applyState(el, def, animate, transition) {
-      gsap.set(el, {
-        "--_gradient---inner": def.colorInner,
-        "--_gradient---mid":   def.colorMid,
-        "--_gradient---edge":  def.colorEdge,
-      });
-  
-      var tweenProps = {
-        "--_gradient---stop-inner": def.stopInner,
-        "--_gradient---stop-mid":   def.stopMid,
-        "--_gradient---stop-edge":  def.stopEdge,
-      };
-  
-      if (def.scale   !== undefined) tweenProps.scale   = def.scale;
-      if (def.opacity !== undefined) tweenProps.opacity = def.opacity;
-  
-      if (animate) {
-        gsap.to(el, Object.assign({}, tweenProps, {
-          duration:  transition.duration,
-          ease:      transition.ease,
-          overwrite: "auto",
-        }));
-      } else {
-        gsap.set(el, tweenProps);
+    focus: {
+      follower:   PRESETS.focusedPrimary,
+      trail:      PRESETS.focusedSecondary,
+      transition: { duration: 1, ease: "back.out(3)" },
+    },
+
+    centered: {
+      centered: true,
+      follower:   PRESETS.centeredPrimary,
+      trail:      PRESETS.centeredSecondary,
+      transition: { duration: 1, ease: "back.out(2)" },
+    },
+  };
+
+
+  // ═══════════════════════════════════════════════════════════════
+  // ENGINE
+  // ═══════════════════════════════════════════════════════════════
+
+  var triggers = document.querySelectorAll("[data-trigger]");
+
+  // ── Canvas ───────────────────────────────────────────────────
+
+  var canvas = document.querySelector('[cs-el="followerCanvas"]');
+  if (!canvas) {
+    console.warn("Follower: missing [cs-el=\"followerCanvas\"] — skipping init.");
+    return;
+  }
+
+  var ctx = canvas.getContext("2d");
+  var dpr = 1;
+
+  function resizeCanvas() {
+    dpr = window.devicePixelRatio || 1;
+    canvas.width  = window.innerWidth  * dpr;
+    canvas.height = window.innerHeight * dpr;
+  }
+  resizeCanvas();
+  window.addEventListener("resize", resizeCanvas);
+
+  // ── Live state objects (tweened by GSAP, read by draw) ───────
+
+  var initState = STATES[DEFAULT_STATE];
+  var fLive = Object.assign({}, initState.follower, { opacity: 0 });
+  var tLive = Object.assign({}, initState.trail || initState.follower, { opacity: 0 });
+
+  gsap.to(fLive, { opacity: initState.follower.opacity,             duration: 2, ease: "power2.out", delay: 0.7 });
+  gsap.to(tLive, { opacity: (initState.trail || initState.follower).opacity, duration: 2, ease: "power2.out", delay: 0.9 });
+
+  // ── Draw ─────────────────────────────────────────────────────
+
+  function drawGradient(x, y, live, extraRadius, breath) {
+    var b0     = breath || 0;
+    var radius = BASE_RADIUS * (live.scale + b0 * BREATHE_SCALE) + (extraRadius || 0);
+    var alpha  = Math.max(0, Math.min(1, live.opacity + b0 * BREATHE_OPACITY));
+    if (radius <= 0 || alpha <= 0) return;
+
+    var r = Math.round(live.r);
+    var g = Math.round(live.g);
+    var b = Math.round(live.b);
+
+    var grad = ctx.createRadialGradient(x, y, 0, x, y, radius);
+    grad.addColorStop(live.innerStop, "rgba(" + r + "," + g + "," + b + ",1)");
+    grad.addColorStop(live.midStop,   "rgba(" + r + "," + g + "," + b + "," + live.midA + ")");
+    grad.addColorStop(1,              "rgba(" + r + "," + g + "," + b + ",0)");
+
+    ctx.save();
+    ctx.globalAlpha = alpha;
+    ctx.fillStyle = grad;
+    ctx.beginPath();
+    ctx.arc(x, y, radius, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.restore();
+  }
+
+  // ── Transitions ───────────────────────────────────────────────
+
+  function transitionTo(stateName, opts) {
+    opts = opts || {};
+    var state = STATES[stateName];
+    if (!state) { console.warn("Follower: unknown state \"" + stateName + "\""); return; }
+
+    var fDef = state.follower;
+    var tDef = state.trail || state.follower;
+    var tr   = opts.transition || state.transition || { duration: 0.5, ease: "power2.out" };
+
+    gsap.to(fLive, Object.assign({}, fDef, { duration: tr.duration, ease: tr.ease, overwrite: "auto" }));
+    gsap.to(tLive, Object.assign({}, tDef, { duration: tr.duration, ease: tr.ease, overwrite: "auto" }));
+  }
+
+  // ── Movement ──────────────────────────────────────────────────
+
+  var mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
+
+  var fPos    = { x: mouse.x, y: mouse.y };
+  var fBufLen = Math.max(DELAY_FRAMES, 1);
+  var fBuf    = [];
+  for (var i = 0; i < fBufLen; i++) fBuf.push({ x: mouse.x, y: mouse.y });
+  var fHead = 0;
+
+  var tPos    = { x: mouse.x, y: mouse.y };
+  var tBufLen = Math.max(TRAIL_DELAY, 1);
+  var tBuf    = [];
+  for (var j = 0; j < tBufLen; j++) tBuf.push({ x: mouse.x, y: mouse.y });
+  var tHead = 0;
+
+  window.addEventListener("pointermove", function(e) {
+    mouse.x = e.clientX;
+    mouse.y = e.clientY;
+  });
+
+  // ── Ticker ────────────────────────────────────────────────────
+
+  var movementLocked    = false;
+  var centeredTriggerEl = null;
+  var fVelX = 0, fVelY = 0;
+  var tVelX = 0, tVelY = 0;
+
+  gsap.ticker.add(function() {
+
+    var fExpand = 0;
+    var tExpand = 0;
+
+    if (movementLocked) {
+      if (centeredTriggerEl) {
+        var rect = centeredTriggerEl.getBoundingClientRect();
+        fPos.x = rect.left + rect.width  / 2;
+        fPos.y = rect.top  + rect.height / 2;
+        tPos.x = fPos.x;
+        tPos.y = fPos.y;
       }
-    }
-  
-    function transitionTo(stateName, opts) {
-      opts = opts || {};
-      var state = STATES[stateName];
-      if (!state) { console.warn('Follower: unknown state "' + stateName + '"'); return; }
-  
-      var fDef = state.follower;
-      var tDef = state.trail || state.follower;
-      var tr   = opts.transition || state.transition || { duration: 0.5, ease: "power2.out" };
-  
-      applyState(followerEl, fDef, true, tr);
-      if (hasTrail) applyState(trailEl, tDef, true, tr);
-    }
-  
-    // ── Set initial state ─────────────────────────────────────────
-  
-    var init = STATES[DEFAULT_STATE];
-    applyState(followerEl, init.follower, false);
-    if (hasTrail) applyState(trailEl, init.trail || init.follower, false);
-  
-    // ── Movement ──────────────────────────────────────────────────
-  
-    var mouse = { x: window.innerWidth / 2, y: window.innerHeight / 2 };
-  
-    followerEl.style.willChange = "transform";
-    gsap.set(followerEl, { xPercent: -50, yPercent: -50, force3D: true });
-    var fPos    = { x: mouse.x, y: mouse.y };
-    var fBufLen = Math.max(DELAY_FRAMES, 1);
-    var fBuf    = [];
-    for (var i = 0; i < fBufLen; i++) fBuf.push({ x: mouse.x, y: mouse.y });
-    var fHead = 0;
-  
-    var tPos, tBuf, tBufLen, tHead;
-    if (hasTrail) {
-      trailEl.style.willChange = "transform";
-      gsap.set(trailEl, { xPercent: -50, yPercent: -50, force3D: true });
-      tPos    = { x: mouse.x, y: mouse.y };
-      tBufLen = Math.max(TRAIL_DELAY, 1);
-      tBuf    = [];
-      for (var j = 0; j < tBufLen; j++) tBuf.push({ x: mouse.x, y: mouse.y });
-      tHead   = 0;
-    }
-  
-    window.addEventListener("pointermove", function(e) {
-      mouse.x = e.clientX;
-      mouse.y = e.clientY;
-    });
-  
-    // ── Ticker ────────────────────────────────────────────────────
-  
-    var movementLocked = false;
-    var threshSq  = THRESHOLD * THRESHOLD;
-    var tThreshSq = TRAIL_THRESHOLD * TRAIL_THRESHOLD;
-  
-    gsap.ticker.add(function() {
-      if (movementLocked) {
-        if (centeredTriggerEl) {
-          var rect = centeredTriggerEl.getBoundingClientRect();
-          var cx = rect.left + rect.width / 2;
-          var cy = rect.top + rect.height / 2;
-          gsap.set(followerEl, { x: cx, y: cy });
-          if (hasTrail) gsap.set(trailEl, { x: cx, y: cy });
-          fPos.x = cx; fPos.y = cy;
-          if (hasTrail) { tPos.x = cx; tPos.y = cy; }
-        }
-        return;
-      }
-  
+    } else {
       fBuf[fHead].x = mouse.x;
       fBuf[fHead].y = mouse.y;
-      var fDelayed = fBuf[(fHead + 1) % fBufLen];
+      var fDelayed  = fBuf[(fHead + 1) % fBufLen];
       fHead = (fHead + 1) % fBufLen;
-  
+
       var dx = fDelayed.x - fPos.x;
       var dy = fDelayed.y - fPos.y;
-      if (dx * dx + dy * dy > threshSq) {
-        fPos.x += dx * FOLLOW_LERP;
-        fPos.y += dy * FOLLOW_LERP;
-      }
-      gsap.set(followerEl, { x: fPos.x, y: fPos.y });
-  
-      if (hasTrail) {
-        tBuf[tHead].x = mouse.x;
-        tBuf[tHead].y = mouse.y;
-        var tDelayed = tBuf[(tHead + 1) % tBufLen];
-        tHead = (tHead + 1) % tBufLen;
-  
-        dx = tDelayed.x - tPos.x;
-        dy = tDelayed.y - tPos.y;
-        if (dx * dx + dy * dy > tThreshSq) {
-          tPos.x += dx * TRAIL_LERP;
-          tPos.y += dy * TRAIL_LERP;
-        }
-        gsap.set(trailEl, { x: tPos.x, y: tPos.y });
-      }
-    });
-  
-    // ── Triggers ──────────────────────────────────────────────────
-  
-    var activeTrigger = null;
-    var centeredTriggerEl = null;
-  
-    if (triggers.length === 0) return;
-  
-    for (var t = 0; t < triggers.length; t++) {
-      (function(trigger) {
-        trigger.addEventListener("mouseenter", function() {
-          var name = trigger.getAttribute("data-trigger");
-          if (!name || !STATES[name]) return;
-  
-          activeTrigger = name;
-          var state = STATES[name];
-  
-          if (state.centered) {
-            movementLocked = true;
-            var rect = trigger.getBoundingClientRect();
-            var cx   = rect.left + rect.width / 2;
-            var cy   = rect.top + rect.height / 2;
+      fVelX = (fVelX + dx * SPRING_STIFFNESS) * SPRING_DAMPING;
+      fVelY = (fVelY + dy * SPRING_STIFFNESS) * SPRING_DAMPING;
+      fPos.x += fVelX;
+      fPos.y += fVelY;
+      var fInstant = Math.sqrt(fVelX * fVelX + fVelY * fVelY);
+      fExpand  = (Math.min(fInstant, VELOCITY_MAX) / VELOCITY_MAX) * VELOCITY_EXPAND;
 
-            gsap.to(followerEl, {
-              x: cx, y: cy,
-              duration: (state.transition && state.transition.duration) || 0.6,
-              ease:     (state.transition && state.transition.ease) || "power3.inOut",
-              overwrite: "auto",
-              onComplete: function() { centeredTriggerEl = trigger; },
-            });
-            if (hasTrail) {
-              gsap.to(trailEl, {
-                x: cx, y: cy,
-                duration: ((state.transition && state.transition.duration) || 0.6) * 1.2,
-                ease:     (state.transition && state.transition.ease) || "power3.inOut",
-                overwrite: "auto",
-              });
-            }
-          }
-  
-          transitionTo(name);
-        });
-  
-        trigger.addEventListener("mouseleave", function() {
-          var name = trigger.getAttribute("data-trigger");
-          if (!name || activeTrigger !== name) return;
-  
-          var state = STATES[name];
-          activeTrigger = null;
-  
-          if (state.centered) {
-            gsap.killTweensOf(followerEl, "x,y");
-            if (hasTrail) gsap.killTweensOf(trailEl, "x,y");
-            centeredTriggerEl = null;
-            for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
-            if (hasTrail) {
-              for (var j = 0; j < tBufLen; j++) { tBuf[j].x = mouse.x; tBuf[j].y = mouse.y; }
-            }
-            movementLocked = false;
-          }
-  
-          transitionTo(DEFAULT_STATE, { transition: DEFAULT_RETURN });
-        });
-      })(triggers[t]);
+      tBuf[tHead].x = mouse.x;
+      tBuf[tHead].y = mouse.y;
+      var tDelayed  = tBuf[(tHead + 1) % tBufLen];
+      tHead = (tHead + 1) % tBufLen;
+
+      dx = tDelayed.x - tPos.x;
+      dy = tDelayed.y - tPos.y;
+      tVelX = (tVelX + dx * TRAIL_STIFFNESS) * TRAIL_DAMPING;
+      tVelY = (tVelY + dy * TRAIL_STIFFNESS) * TRAIL_DAMPING;
+      tPos.x += tVelX;
+      tPos.y += tVelY;
+      var tInstant = Math.sqrt(tVelX * tVelX + tVelY * tVelY);
+      tExpand  = (Math.min(tInstant, VELOCITY_MAX) / VELOCITY_MAX) * VELOCITY_EXPAND;
     }
-  
+
+    var fBreath = 0, tBreath = 0;
+    if (BREATHE_ENABLED) {
+      var bAngle = (gsap.ticker.time / BREATHE_PERIOD) * Math.PI * 2;
+      fBreath = Math.sin(bAngle);
+      tBreath = Math.sin(bAngle + BREATHE_PHASE);
+    }
+
+    ctx.clearRect(0, 0, canvas.width, canvas.height);
+    ctx.save();
+    ctx.scale(dpr, dpr);
+    if (SHOW_TRAIL) drawGradient(tPos.x, tPos.y, tLive, tExpand, tBreath);
+    drawGradient(fPos.x, fPos.y, fLive, fExpand, fBreath);
+    ctx.restore();
   });
+
+  // ── Triggers ──────────────────────────────────────────────────
+
+  var activeStack = [];
+
+  if (triggers.length === 0) return;
+
+  for (var t = 0; t < triggers.length; t++) {
+    (function(trigger) {
+      trigger.addEventListener("mouseenter", function() {
+        var name = trigger.getAttribute("data-trigger");
+        if (!name || !STATES[name]) return;
+
+        activeStack.push(name);
+        var state = STATES[name];
+
+        if (state.centered) {
+          movementLocked = true;
+          fSpeed = 0; tSpeed = 0;
+          var rect = trigger.getBoundingClientRect();
+          var cx   = rect.left + rect.width  / 2;
+          var cy   = rect.top  + rect.height / 2;
+
+          gsap.to(fPos, {
+            x: cx, y: cy,
+            duration:  (state.transition && state.transition.duration) || 0.6,
+            ease:      (state.transition && state.transition.ease) || "power3.inOut",
+            overwrite: "auto",
+            onComplete: function() { centeredTriggerEl = trigger; },
+          });
+          gsap.to(tPos, {
+            x: cx, y: cy,
+            duration:  ((state.transition && state.transition.duration) || 0.6) * 1.2,
+            ease:      (state.transition && state.transition.ease) || "power3.inOut",
+            overwrite: "auto",
+          });
+        }
+
+        transitionTo(name);
+      });
+
+      trigger.addEventListener("mouseleave", function() {
+        var name = trigger.getAttribute("data-trigger");
+        if (!name) return;
+
+        var idx = activeStack.lastIndexOf(name);
+        if (idx === -1) return;
+        activeStack.splice(idx, 1);
+
+        var state = STATES[name];
+
+        if (state.centered) {
+          gsap.killTweensOf(fPos);
+          gsap.killTweensOf(tPos);
+          centeredTriggerEl = null;
+          fVelX = 0; fVelY = 0;
+          tVelX = 0; tVelY = 0;
+          for (var i = 0; i < fBufLen; i++) { fBuf[i].x = mouse.x; fBuf[i].y = mouse.y; }
+          for (var j = 0; j < tBufLen; j++) { tBuf[j].x = mouse.x; tBuf[j].y = mouse.y; }
+          movementLocked = false;
+        }
+
+        var returnTo = activeStack.length > 0 ? activeStack[activeStack.length - 1] : null;
+        if (returnTo) {
+          transitionTo(returnTo);
+        } else {
+          transitionTo(DEFAULT_STATE, { transition: DEFAULT_RETURN });
+        }
+      });
+    })(triggers[t]);
+  }
+
+});
