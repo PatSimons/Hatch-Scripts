@@ -100,7 +100,7 @@ document.addEventListener("DOMContentLoaded", function() {
   // 6. STATE DEFINITIONS
   // ═══════════════════════════════════════════════════════════════
   //
-  //  Trigger usage:  data-trigger="stateName"
+  //  Trigger usage:  data-follower="stateName"
   //
   //  follower / trail  → preset reference (trail falls back to follower)
   //  centered          → locks movement, tweens to trigger element center
@@ -144,7 +144,7 @@ document.addEventListener("DOMContentLoaded", function() {
   // ENGINE
   // ═══════════════════════════════════════════════════════════════
 
-  var triggers = document.querySelectorAll("[data-trigger]");
+  var triggers = document.querySelectorAll("[data-follower]");
 
   // ── Canvas ───────────────────────────────────────────────────
 
@@ -310,7 +310,7 @@ document.addEventListener("DOMContentLoaded", function() {
   for (var t = 0; t < triggers.length; t++) {
     (function(trigger) {
       trigger.addEventListener("mouseenter", function() {
-        var name = trigger.getAttribute("data-trigger");
+        var name = trigger.getAttribute("data-follower");
         if (!name || !STATES[name]) return;
 
         activeStack.push(name);
@@ -342,7 +342,7 @@ document.addEventListener("DOMContentLoaded", function() {
       });
 
       trigger.addEventListener("mouseleave", function() {
-        var name = trigger.getAttribute("data-trigger");
+        var name = trigger.getAttribute("data-follower");
         if (!name) return;
 
         var idx = activeStack.lastIndexOf(name);
