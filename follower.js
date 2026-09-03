@@ -137,9 +137,7 @@ document.addEventListener("DOMContentLoaded", function() {
       trail:      PRESETS.centeredSecondary,
       transition: { duration: 1, ease: "back.out(2)" },
     },
-
-    // ponytail: sentinel — participates in enter/leave stack bookkeeping
-    // but never changes the visual; nested trigger keeps the parent's state.
+    
     inherit: {}
   };
 
