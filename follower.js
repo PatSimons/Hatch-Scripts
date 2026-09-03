@@ -137,7 +137,19 @@ document.addEventListener("DOMContentLoaded", function() {
       trail:      PRESETS.centeredSecondary,
       transition: { duration: 1, ease: "back.out(2)" },
     },
+
+    // ponytail: sentinel — participates in enter/leave stack bookkeeping
+    // but never changes the visual; nested trigger keeps the parent's state.
+    inherit: {}
   };
+
+  // Topmost stack entry that isn't "inherit" (null if none).
+  function resolveState() {
+    for (var i = activeStack.length - 1; i >= 0; i--) {
+      if (activeStack[i] !== "inherit") return activeStack[i];
+    }
+    return null;
+  }
 
 
   // ═══════════════════════════════════════════════════════════════
@@ -338,7 +350,7 @@ document.addEventListener("DOMContentLoaded", function() {
           });
         }
 
-        transitionTo(name);
+        transitionTo(resolveState() || DEFAULT_STATE);
       });
 
       trigger.addEventListener("mouseleave", function() {
@@ -362,7 +374,7 @@ document.addEventListener("DOMContentLoaded", function() {
           movementLocked = false;
         }
 
-        var returnTo = activeStack.length > 0 ? activeStack[activeStack.length - 1] : null;
+        var returnTo = resolveState();
         if (returnTo) {
           transitionTo(returnTo);
         } else {
